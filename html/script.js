@@ -16,28 +16,33 @@ document.addEventListener("keydown", function (event) {
 
 function closeGarageMenu() {
     const container = document.querySelector(".container");
-    container.style.display = "none";
-
-    fetch("https://qb-garages/closeGarage", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json; charset=UTF-8",
-        },
-        body: JSON.stringify({}),
-    })
-        .then((response) => response.json())
-        .then((data) => {
-            if (data === "ok") {
-                return;
-            } else {
-                console.error("Failed to close Garage UI");
-            }
-        });
+    container.classList.remove("visible");
+    
+    setTimeout(() => {
+        container.style.display = "none";
+        
+        fetch("https://qb-garages/closeGarage", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json; charset=UTF-8",
+            },
+            body: JSON.stringify({}),
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data !== "ok") {
+                    console.error("Failed to close Garage UI");
+                }
+            });
+    }, 300);
 }
 
 function displayUI() {
     const container = document.querySelector(".container");
     container.style.display = "block";
+    requestAnimationFrame(() => {
+        container.classList.add("visible");
+    });
 }
 
 function populateVehicleList(garageLabel, vehicles) {
@@ -55,7 +60,6 @@ function populateVehicleList(garageLabel, vehicles) {
         const vehicleItem = document.createElement("div");
         vehicleItem.classList.add("vehicle-item");
 
-        // Vehicle Info: Name, Plate & Mileage
         const vehicleInfo = document.createElement("div");
         vehicleInfo.classList.add("vehicle-info");
 
@@ -76,21 +80,69 @@ function populateVehicleList(garageLabel, vehicles) {
 
         vehicleItem.appendChild(vehicleInfo);
 
-        // Finance Info
+        const stats = document.createElement("div");
+        stats.classList.add("stats");
+
+        const maxValues = {
+            fuel: 100,
+            engine: 1000,
+            body: 1000,
+        };
+
+        ["fuel", "engine", "body"].forEach((statLabel) => {
+            const stat = document.createElement("div");
+            stat.classList.add("stat");
+            
+            const label = document.createElement("div");
+            label.classList.add("label");
+            label.textContent = statLabel.charAt(0).toUpperCase() + statLabel.slice(1);
+            stat.appendChild(label);
+            
+            const progressBar = document.createElement("div");
+            progressBar.classList.add("progress-bar");
+            
+            const progress = document.createElement("span");
+            const progressText = document.createElement("span");
+            progressText.classList.add("progress-text");
+            
+            const percentage = (v[statLabel] / maxValues[statLabel]) * 100;
+            progress.style.width = "0%";
+            progressText.textContent = Math.round(percentage) + "%";
+
+            if (percentage >= 75) {
+                progress.classList.add("bar-green");
+            } else if (percentage >= 50) {
+                progress.classList.add("bar-yellow");
+            } else {
+                progress.classList.add("bar-red");
+            }
+
+            progressBar.appendChild(progressText);
+            progressBar.appendChild(progress);
+            stat.appendChild(progressBar);
+            stats.appendChild(stat);
+            
+            setTimeout(() => {
+                progress.style.width = percentage + "%";
+            }, 100 + Math.random() * 300);
+        });
+        
+        vehicleItem.appendChild(stats);
+
         const financeDriveContainer = document.createElement("div");
         financeDriveContainer.classList.add("finance-drive-container");
+        
         const financeInfo = document.createElement("div");
         financeInfo.classList.add("finance-info");
 
         if (v.balance && v.balance > 0) {
-            financeInfo.textContent = "Balance: $" + v.balance.toFixed(0);
+            financeInfo.textContent = "$" + v.balance.toFixed(0);
         } else {
             financeInfo.textContent = "Paid Off";
         }
 
         financeDriveContainer.appendChild(financeInfo);
 
-        // Drive Button
         let status;
         let isDepotPrice = false;
 
@@ -103,10 +155,10 @@ function populateVehicleList(garageLabel, vehicles) {
                 } else if (v.type === "depot") {
                     status = "$" + v.depotPrice.toFixed(0);
                 } else {
-                    status = "Out";
+                    status = "Track";
                 }
             } else {
-                status = "Out";
+                status = "Track";
             }
         } else if (v.state === 1) {
             if (v.depotPrice && v.depotPrice > 0) {
@@ -131,16 +183,16 @@ function populateVehicleList(garageLabel, vehicles) {
         driveButton.textContent = status;
 
         if (status === "Depot" || status === "Impound") {
-            driveButton.style.backgroundColor = "#222";
             driveButton.disabled = true;
-        }
-
-        if (status === "Out") {
-            driveButton.style.backgroundColor = "#222";
         }
 
         driveButton.onclick = function () {
             if (driveButton.disabled) return;
+            
+            driveButton.style.transform = "scale(0.95)";
+            setTimeout(() => {
+                driveButton.style.transform = "scale(1)";
+            }, 100);
 
             const vehicleStats = {
                 fuel: v.fuel,
@@ -158,7 +210,7 @@ function populateVehicleList(garageLabel, vehicles) {
                 stats: vehicleStats,
             };
 
-            if (status === "Out") {
+            if (status === "Track") {
                 fetch("https://qb-garages/trackVehicle", {
                     method: "POST",
                     headers: {
@@ -170,8 +222,6 @@ function populateVehicleList(garageLabel, vehicles) {
                     .then((data) => {
                         if (data === "ok") {
                             closeGarageMenu();
-                        } else {
-                            return;
                         }
                     });
             } else if (isDepotPrice) {
@@ -186,8 +236,6 @@ function populateVehicleList(garageLabel, vehicles) {
                     .then((data) => {
                         if (data === "ok") {
                             closeGarageMenu();
-                        } else {
-                            console.error("Failed to pay depot price.");
                         }
                     });
             } else {
@@ -202,8 +250,6 @@ function populateVehicleList(garageLabel, vehicles) {
                     .then((data) => {
                         if (data === "ok") {
                             closeGarageMenu();
-                        } else {
-                            console.error("Failed to close Garage UI.");
                         }
                     });
             }
@@ -211,54 +257,6 @@ function populateVehicleList(garageLabel, vehicles) {
 
         financeDriveContainer.appendChild(driveButton);
         vehicleItem.appendChild(financeDriveContainer);
-
-        // Progress Bars: Fuel, Engine, Body
-        const stats = document.createElement("div");
-        stats.classList.add("stats");
-
-        const maxValues = {
-            fuel: 100,
-            engine: 1000,
-            body: 1000,
-        };
-
-        ["fuel", "engine", "body"].forEach((statLabel) => {
-            const stat = document.createElement("div");
-            stat.classList.add("stat");
-            const label = document.createElement("div");
-            label.classList.add("label");
-            label.textContent = statLabel.charAt(0).toUpperCase() + statLabel.slice(1);
-            stat.appendChild(label);
-            const progressBar = document.createElement("div");
-            progressBar.classList.add("progress-bar");
-            const progress = document.createElement("span");
-            const progressText = document.createElement("span");
-            progressText.classList.add("progress-text");
-            const percentage = (v[statLabel] / maxValues[statLabel]) * 100;
-            progress.style.width = percentage + "%";
-            progressText.textContent = Math.round(percentage) + "%";
-
-            if (percentage >= 75) {
-                progress.classList.add("bar-green");
-                if (percentage > 45) {
-                    progressText.style.color = "var(--md-on-success)";
-                }
-            } else if (percentage >= 50) {
-                progress.classList.add("bar-yellow");
-                if (percentage > 45) {
-                    progressText.style.color = "var(--md-on-warning)";
-                }
-            } else {
-                progress.classList.add("bar-red");
-                // Keep default text color for low percentages
-            }
-
-            progressBar.appendChild(progressText);
-            progressBar.appendChild(progress);
-            stat.appendChild(progressBar);
-            stats.appendChild(stat);
-            vehicleItem.appendChild(stats);
-        });
 
         fragment.appendChild(vehicleItem);
     });
